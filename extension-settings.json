@@ -1,0 +1,4 @@
+{
+  "fileUris": ["https://raw.githubusercontent.com/kborkowski/nd081-c4-azure-performance-project-starter/master/vmss-deploy.sh"],
+  "commandToExecute": "bash vmss-deploy.sh"
+}
