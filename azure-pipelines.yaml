@@ -21,7 +21,7 @@ stages:
   jobs:
   - deployment: VMDeploy
     pool:
-      vmImage: 'ubuntu-latest'  # Updated from deprecated Ubuntu-16.04
+      vmImage: 'ubuntu-latest'
     displayName: Deploy to VMSS
     environment:
       name: ACDND-C4-Project
@@ -31,24 +31,41 @@ stages:
         deploy:
           steps:
           - task: Bash@3
+            displayName: 'Install Dependencies and Deploy Application'
             inputs:
               targetType: 'inline'
               script: |
                 #! /bin/bash
                 
+                echo "=== Deploying Azure Vote Application ==="
+                
                 # Updated dependencies for Python 3.11 compatibility
-                # Install from requirements.txt for version consistency
                 pip3 install --upgrade pip
                 pip3 install Flask==3.0.3
                 pip3 install redis==5.0.8
-                # Note: OpenCensus is deprecated. Implement Azure Monitor OpenTelemetry instead
-                # pip3 install azure-monitor-opentelemetry
-
+                
+                # Create app directory
                 cd ~/
                 DIR=/home/udacityadmin/app
                 if [ ! -d "$DIR" ]; then
                     mkdir app
                 fi
+                
+                # Move and extract artifact
                 mv /home/udacityadmin/azagent/_work/1/drop-azurevote/$(Build.BuildId)-azurevote.zip app
                 cd app
                 unzip -o $(Build.BuildId)-azurevote.zip
+                
+                # Ensure Redis is running
+                sudo systemctl start redis-server
+                sudo systemctl enable redis-server
+                
+                # Stop any existing app process
+                pkill -f "python3 main.py" || true
+                sleep 2
+                
+                # Start the application
+                nohup python3 main.py > app.log 2>&1 &
+                
+                echo "Application deployed successfully!"
+                echo "App will be available at http://20.184.139.83"
