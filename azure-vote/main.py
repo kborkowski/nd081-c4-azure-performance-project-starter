@@ -171,4 +171,4 @@ if __name__ == "__main__":
     # For running the application locally 
     # app.run() # local
     # For deployment to VMSS
-    app.run(host='0.0.0.0', threaded=True, debug=True) # remote
+    app.run(host='0.0.0.0', port=80, threaded=True, debug=True) # remote
