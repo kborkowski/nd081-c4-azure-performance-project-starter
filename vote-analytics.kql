@@ -1,0 +1,67 @@
+// KQL Query to visualize Cats vs Dogs votes from Application Insights
+// This query analyzes the custom events logged by the Azure Voting App
+
+// Option 1: Time series chart showing vote counts over time
+traces
+| where message in ("Cats Vote", "Dogs Vote")
+| extend VoteType = message
+| extend VoteCount = toint(customDimensions[message])
+| where isnotnull(VoteCount)
+| summarize TotalVotes = max(VoteCount) by VoteType, bin(timestamp, 5m)
+| render timechart 
+    with (
+        title="Cats vs Dogs Votes Over Time",
+        xtitle="Time",
+        ytitle="Vote Count"
+    )
+
+// Option 2: Bar chart showing current vote totals
+// traces
+// | where message in ("Cats Vote", "Dogs Vote")
+// | extend VoteType = message
+// | extend VoteCount = toint(customDimensions[message])
+// | where isnotnull(VoteCount)
+// | summarize CurrentVotes = max(VoteCount) by VoteType
+// | render barchart
+//     with (
+//         title="Current Vote Totals: Cats vs Dogs",
+//         xtitle="Vote Type",
+//         ytitle="Total Votes"
+//     )
+
+// Option 3: Pie chart showing vote distribution
+// traces
+// | where message in ("Cats Vote", "Dogs Vote")
+// | extend VoteType = message
+// | extend VoteCount = toint(customDimensions[message])
+// | where isnotnull(VoteCount)
+// | summarize CurrentVotes = max(VoteCount) by VoteType
+// | render piechart
+//     with (
+//         title="Vote Distribution: Cats vs Dogs"
+//     )
+
+// Option 4: Detailed table view with latest votes
+// traces
+// | where message in ("Cats Vote", "Dogs Vote")
+// | extend VoteType = message
+// | extend VoteCount = toint(customDimensions[message])
+// | where isnotnull(VoteCount)
+// | project timestamp, VoteType, VoteCount, cloud_RoleName, operation_Id
+// | order by timestamp desc
+// | take 100
+
+// Option 5: Column chart comparing votes side-by-side
+// traces
+// | where message in ("Cats Vote", "Dogs Vote")
+// | extend VoteType = message
+// | extend VoteCount = toint(customDimensions[message])
+// | where isnotnull(VoteCount)
+// | summarize CurrentVotes = max(VoteCount) by VoteType
+// | render columnchart
+//     with (
+//         title="Cats vs Dogs: Vote Comparison",
+//         xtitle="Animal",
+//         ytitle="Votes",
+//         legend=hidden
+//     )

@@ -82,24 +82,28 @@ if ("TITLE" in os.environ and os.environ['TITLE']):
 else:
     title = app.config['TITLE']
 
-# Redis Connection - check for REDIS environment variable (Docker) or use localhost
-redis_host = os.environ.get('REDIS', 'localhost')
-redis_port = int(os.environ.get('REDIS_PORT', 6379))
+# Redis Connection for AKS deployment
+# Comment/remove the next two lines of code (used for local/VMSS deployment).
+# Redis Connection to a local server running on the same machine where the current Flask app is running.
+# r = redis.Redis()
 
+# Redis configurations for AKS (multi-container environment)
+redis_server = os.environ.get('REDIS', 'localhost')
+
+# Redis Connection to another container
 try:
-    r = redis.Redis(
-        host=redis_host,
-        port=redis_port,
-        db=0,
-        socket_connect_timeout=5,
-        decode_responses=True  # Automatically decode responses to strings
-    )
-    # Test connection
+    if "REDIS_PWD" in os.environ:
+        r = redis.StrictRedis(host=redis_server,
+                              port=6379,
+                              password=os.environ['REDIS_PWD'],
+                              decode_responses=True)
+    else:
+        r = redis.Redis(redis_server, decode_responses=True)
     r.ping()
-    logger.info(f"Connected to Redis at {redis_host}:{redis_port}")
-except redis.ConnectionError as e:
-    logger.error(f"Failed to connect to Redis at {redis_host}:{redis_port}: {e}")
-    sys.exit(1)
+    logger.info(f"Connected to Redis at {redis_server}")
+except redis.ConnectionError:
+    logger.error(f'Failed to connect to Redis at {redis_server}, terminating.')
+    exit('Failed to connect to Redis, terminating.')
 
 # Change title to host name to demo NLB
 if app.config['SHOWHOST'] == "true":

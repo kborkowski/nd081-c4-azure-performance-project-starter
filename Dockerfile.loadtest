@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install required packages
+RUN pip install --no-cache-dir requests
+
+# Create the load test script
+COPY load_test.py .
+
+# Run the load test
+CMD ["python", "load_test.py"]
