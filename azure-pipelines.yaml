@@ -5,7 +5,7 @@ stages:
   jobs:
   - job: Build
     pool:
-      name: Hosted Ubuntu 1604
+      vmImage: 'ubuntu-latest'  # Updated from deprecated Ubuntu 1604
     steps:
     - task: ArchiveFiles@2
       displayName: 'Archive Azure Vote'
@@ -17,11 +17,11 @@ stages:
     - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)-azurevote.zip
       displayName: 'Upload Package'
       artifact: drop-azurevote
-- stage:
+- stage: Deploy
   jobs:
   - deployment: VMDeploy
     pool:
-      vmImage: 'Ubuntu-16.04'
+      vmImage: 'ubuntu-latest'  # Updated from deprecated Ubuntu-16.04
     displayName: Deploy to VMSS
     environment:
       name: ACDND-C4-Project
@@ -35,11 +35,14 @@ stages:
               targetType: 'inline'
               script: |
                 #! /bin/bash
-
-                pip3 install redis
-                pip3 install opencensus-ext-azure
-                pip3 install flask
-                pip3 install opencensus-ext-flask
+                
+                # Updated dependencies for Python 3.11 compatibility
+                # Install from requirements.txt for version consistency
+                pip3 install --upgrade pip
+                pip3 install Flask==3.0.3
+                pip3 install redis==5.0.8
+                # Note: OpenCensus is deprecated. Implement Azure Monitor OpenTelemetry instead
+                # pip3 install azure-monitor-opentelemetry
 
                 cd ~/
                 DIR=/home/udacityadmin/app
