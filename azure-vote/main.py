@@ -7,40 +7,63 @@ import logging
 from datetime import datetime
 
 # TODO: Import required libraries for App Insights
-from azure.monitor.opentelemetry import configure_azure_monitor
-from opentelemetry import trace
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.trace import TracerProvider
+from opencensus.ext.azure.log_exporter import AzureLogHandler
+from opencensus.ext.azure.log_exporter import AzureEventHandler
+from opencensus.ext.azure import metrics_exporter
+from opencensus.stats import aggregation as aggregation_module
+from opencensus.stats import measure as measure_module
+from opencensus.stats import stats as stats_module
+from opencensus.stats import view as view_module
+from opencensus.tags import tag_map as tag_map_module
+from opencensus.trace import config_integration
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.trace.samplers import ProbabilitySampler
+from opencensus.trace.tracer import Tracer
+from opencensus.ext.flask.flask_middleware import FlaskMiddleware
 
-# Setup basic logging
-logging.basicConfig(level=logging.INFO)
+# For metrics
+stats = stats_module.stats
+view_manager = stats.view_manager
+
+# Standard Logging
+config_integration.trace_integrations(['logging'])
+config_integration.trace_integrations(['requests'])
+
 logger = logging.getLogger(__name__)
+handler = AzureLogHandler(connection_string='InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6')
+handler.setFormatter(logging.Formatter('%(traceId)s %(spanId)s %(message)s'))
+logger.addHandler(handler)
 
 # TODO: Add Logger for Custom Events
-# Application Insights Connection String
-connection_string = 'InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus.livediagnostics.monitor.azure.com/;ApplicationId=6e07b9c6-392a-4b41-aee1-4ce94b9e9b86'
+# Logging custom Events 
+logger.addHandler(AzureEventHandler(connection_string='InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6'))
+# Set the logging level
+logger.setLevel(logging.INFO)
 
-# Configure Azure Monitor with OpenTelemetry
-# This sets up automatic logging, metrics, tracing, and request tracking
-configure_azure_monitor(connection_string=connection_string)
+# TODO: Add Metrics object
+# Metrics
+exporter = metrics_exporter.new_metrics_exporter(
+    enable_standard_metrics=True,
+    connection_string='InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6')
+view_manager.register_exporter(exporter)
 
 # TODO: Add Tracer object
-# Get tracer for custom spans
-tracer = trace.get_tracer(__name__)
-
-# TODO: Add Metrics object  
-# Get meter for custom metrics
-meter = metrics.get_meter(__name__)
-
-# Create a counter for votes
-vote_counter = meter.create_counter(
-    name="vote_count",
-    description="Number of votes",
-    unit="1"
+# Tracing
+tracer = Tracer(
+    exporter=AzureExporter(
+        connection_string='InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6'),
+    sampler=ProbabilitySampler(1.0),
 )
 
 app = Flask(__name__)
+
+# TODO: Add Requests object
+# Requests
+middleware = FlaskMiddleware(
+    app,
+    exporter=AzureExporter(connection_string="InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6"),
+    sampler=ProbabilitySampler(rate=1.0)
+)
 
 # Load configurations from environment or config file
 app.config.from_pyfile('config_file.cfg')
@@ -94,9 +117,14 @@ def index():
 
         # Get current values
         vote1 = r.get(button1)
-        vote2 = r.get(button2)
+        # TODO: use tracer object to trace cat vote
+        with tracer.span(name="Cats Vote") as span:
+            print("Cats Vote")
         
-        logger.info(f"Current votes - {button1}: {vote1}, {button2}: {vote2}")
+        vote2 = r.get(button2)
+        # TODO: use tracer object to trace dog vote
+        with tracer.span(name="Dogs Vote") as span:
+            print("Dogs Vote")
 
         # Return index with values
         return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
@@ -109,9 +137,14 @@ def index():
             r.set(button1, 0)
             r.set(button2, 0)
             vote1 = r.get(button1)
+            properties = {'custom_dimensions': {'Cats Vote': vote1}}
+            # TODO: use logger object to log cat vote
+            logger.info('Cats Vote', extra=properties)
+
             vote2 = r.get(button2)
-            
-            logger.info(f"Votes reset - {button1}: {vote1}, {button2}: {vote2}")
+            properties = {'custom_dimensions': {'Dogs Vote': vote2}}
+            # TODO: use logger object to log dog vote
+            logger.info('Dogs Vote', extra=properties)
 
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
@@ -123,26 +156,20 @@ def index():
             
             # Get current values
             vote1 = r.get(button1)
-            vote2 = r.get(button2)
-            
-            # TODO: Use tracer object to trace cat/dog vote
-            # Create a custom span for the vote event
-            with tracer.start_as_current_span("process_vote") as span:
-                span.set_attribute("vote.choice", vote)
-                span.set_attribute("vote.count", int(vote1) if vote == button1 else int(vote2))
-                
-                # TODO: Use logger object to log cat/dog vote
-                # Log custom event based on vote  
-                logger.info(f"Vote recorded for {vote} - {button1}: {vote1}, {button2}: {vote2}")
-                
-                # Track metrics - increment vote counter
-                vote_counter.add(1, {"vote_choice": vote})
+            properties = {'custom_dimensions': {'Cats Vote': vote1}}
+            # TODO: use logger object to log cat vote
+            logger.info('Cats Vote', extra=properties)
 
-            logger.info(f"Vote recorded for {vote} - Current: {button1}: {vote1}, {button2}: {vote2}")
+            vote2 = r.get(button2)
+            properties = {'custom_dimensions': {'Dogs Vote': vote2}}
+            # TODO: use logger object to log dog vote
+            logger.info('Dogs Vote', extra=properties)
 
             # Return results
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
 if __name__ == "__main__":
-    # For production use
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    # For running the application locally 
+    # app.run() # local
+    # For deployment to VMSS
+    app.run(host='0.0.0.0', threaded=True, debug=True) # remote
