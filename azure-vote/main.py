@@ -7,69 +7,40 @@ import logging
 from datetime import datetime
 
 # TODO: Import required libraries for App Insights
-from opencensus.ext.azure.log_exporter import AzureLogHandler
-from opencensus.ext.azure import metrics_exporter
-from opencensus.ext.azure.trace_exporter import AzureExporter
-from opencensus.ext.flask.flask_middleware import FlaskMiddleware
-from opencensus.trace.samplers import ProbabilitySampler
-from opencensus.stats import aggregation as aggregation_module
-from opencensus.stats import measure as measure_module
-from opencensus.stats import stats as stats_module
-from opencensus.stats import view as view_module
-from opencensus.tags import tag_map as tag_map_module
+from azure.monitor.opentelemetry import configure_azure_monitor
+from opentelemetry import trace
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.trace import TracerProvider
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # TODO: Add Logger for Custom Events
-# Application Insights Instrumentation Key
-instrumentation_key = '1b3eeee2-6299-4b64-9822-35982de50ac6'
+# Application Insights Connection String
+connection_string = 'InstrumentationKey=1b3eeee2-6299-4b64-9822-35982de50ac6;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus.livediagnostics.monitor.azure.com/;ApplicationId=6e07b9c6-392a-4b41-aee1-4ce94b9e9b86'
 
-# Add Azure Log Handler for custom events
-logger.addHandler(AzureLogHandler(connection_string=f'InstrumentationKey={instrumentation_key}'))
-
-app = Flask(__name__)
-
-# TODO: Add Requests object
-# Enable Application Insights Flask middleware for request tracking
-middleware = FlaskMiddleware(
-    app,
-    exporter=AzureExporter(connection_string=f'InstrumentationKey={instrumentation_key}'),
-    sampler=ProbabilitySampler(rate=1.0)
-)
-
-# TODO: Add Metrics object
-# Setup metrics exporter
-metrics_exp = metrics_exporter.new_metrics_exporter(
-    connection_string=f'InstrumentationKey={instrumentation_key}'
-)
-
-# Create stats and view manager
-stats = stats_module.stats
-view_manager = stats.view_manager
-view_manager.register_exporter(metrics_exp)
-
-# Create measure for vote count
-vote_measure = measure_module.MeasureInt(
-    "votes",
-    "number of votes",
-    "votes"
-)
-
-# Create aggregation and view for vote metrics
-vote_view = view_module.View(
-    "vote_count",
-    "number of votes",
-    [],
-    vote_measure,
-    aggregation_module.CountAggregation()
-)
-view_manager.register_view(vote_view)
-mmap = stats.stats_recorder
+# Configure Azure Monitor with OpenTelemetry
+# This sets up automatic logging, metrics, tracing, and request tracking
+configure_azure_monitor(connection_string=connection_string)
 
 # TODO: Add Tracer object
-# Tracer is automatically set up by FlaskMiddleware above
+# Get tracer for custom spans
+tracer = trace.get_tracer(__name__)
+
+# TODO: Add Metrics object  
+# Get meter for custom metrics
+meter = metrics.get_meter(__name__)
+
+# Create a counter for votes
+vote_counter = meter.create_counter(
+    name="vote_count",
+    description="Number of votes",
+    unit="1"
+)
+
+app = Flask(__name__)
 
 # Load configurations from environment or config file
 app.config.from_pyfile('config_file.cfg')
@@ -155,16 +126,17 @@ def index():
             vote2 = r.get(button2)
             
             # TODO: Use tracer object to trace cat/dog vote
-            # Tracer is handled automatically by FlaskMiddleware
-            
-            # TODO: Use logger object to log cat/dog vote
-            # Log custom event based on vote
-            properties = {'custom_dimensions': {'vote': vote, button1: int(vote1), button2: int(vote2)}}
-            logger.info(f"Vote recorded for {vote}", extra=properties)
-            
-            # Track metrics
-            mmap.measure_int_put(vote_measure, 1)
-            mmap.record(tag_map_module.TagMap())
+            # Create a custom span for the vote event
+            with tracer.start_as_current_span("process_vote") as span:
+                span.set_attribute("vote.choice", vote)
+                span.set_attribute("vote.count", int(vote1) if vote == button1 else int(vote2))
+                
+                # TODO: Use logger object to log cat/dog vote
+                # Log custom event based on vote  
+                logger.info(f"Vote recorded for {vote} - {button1}: {vote1}, {button2}: {vote2}")
+                
+                # Track metrics - increment vote counter
+                vote_counter.add(1, {"vote_choice": vote})
 
             logger.info(f"Vote recorded for {vote} - Current: {button1}: {vote1}, {button2}: {vote2}")
 
